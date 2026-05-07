@@ -5,6 +5,7 @@ import {
   Pressable,
   ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme } from '@/hooks/use-theme';
@@ -24,9 +25,9 @@ export default function CoupleSpaceScreen() {
 
   const handleContinue = () => {
     if (selected === 'create') {
-      router.push('/invite-partner');
+      router.push({ pathname: '/create-avatar', params: { flow: 'create' } });
     } else if (selected === 'join') {
-      router.push('/join-space');
+      router.push({ pathname: '/create-avatar', params: { flow: 'join' } });
     }
   };
 
@@ -73,7 +74,7 @@ export default function CoupleSpaceScreen() {
               { color: colors.textSecondary, marginTop: spacing.md, fontFamily: Fonts.regular },
             ]}
           >
-            Start your journey together by creating a new space or joining your partner's space.
+            {`Start your journey together by creating a new space or joining your partner's space.`}
           </ThemedText>
 
           {/* Options */}
@@ -93,7 +94,7 @@ export default function CoupleSpaceScreen() {
               ]}
             >
               <View style={[styles.optionIcon, { backgroundColor: colors.primary + '20' }]}>
-                <ThemedText style={[styles.optionEmoji]}>✨</ThemedText>
+                <Ionicons name="sparkles" size={28} color={colors.primary} />
               </View>
               <ThemedText style={[styles.optionTitle, { fontFamily: Fonts.semibold }]}>
                 Create a space
@@ -124,7 +125,7 @@ export default function CoupleSpaceScreen() {
               ]}
             >
               <View style={[styles.optionIcon, { backgroundColor: colors.accent + '20' }]}>
-                <ThemedText style={[styles.optionEmoji]}>💕</ThemedText>
+                <Ionicons name="heart" size={28} color={colors.accent} />
               </View>
               <ThemedText style={[styles.optionTitle, { fontFamily: Fonts.semibold }]}>
                 Join a space
@@ -226,9 +227,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
-  },
-  optionEmoji: {
-    fontSize: 28,
   },
   optionTitle: {
     fontSize: 18,

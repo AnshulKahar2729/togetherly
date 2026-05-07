@@ -16,7 +16,7 @@ export default function OnboardingScreen() {
   }, []);
 
   const handleGetStarted = useCallback(() => {
-    router.replace('/create-avatar');
+    router.replace('/couple-space');
   }, [router]);
 
   return (

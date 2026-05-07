@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,52 +7,114 @@ import {
   Share,
   Alert,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
 import { useTheme } from '@/hooks/use-theme';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
-
-// Generate a random invite code
-const generateInviteCode = () => {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-};
+import { saveLocalCoupleSpace } from '@/lib/storage/couple-space';
+import { createSpace, getSpace, subscribeToPartnerJoined } from '@/lib/api/spaces';
+import { getUser } from '@/lib/api/users';
+import { loadUserProfile, saveUserProfile } from '@/lib/storage/user-profile';
 
 export default function InvitePartnerScreen() {
   const router = useRouter();
   const { colors, spacing, borderRadius } = useTheme();
-  const [inviteCode] = useState(generateInviteCode);
+  const [inviteCode, setInviteCode] = useState('');
+  const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  const copyIconScale = useSharedValue(1);
+  const copyIconAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: copyIconScale.value }],
+  }));
+
   const inviteLink = `togetherly.app/${inviteCode}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    (async () => {
+      try {
+        const profile = loadUserProfile();
+        if (!profile) throw new Error('Missing local user profile');
+        let currentSpaceId = profile.spaceId;
+        if (currentSpaceId) {
+          const existingSpace = await getSpace(currentSpaceId).catch(() => null);
+          if (!existingSpace) {
+            currentSpaceId = null;
+          } else if (!cancelled) {
+            setInviteCode(existingSpace.inviteCode);
+            saveLocalCoupleSpace({ inviteCode: existingSpace.inviteCode, role: 'owner' });
+          }
+        }
+        if (!currentSpaceId) {
+          const newSpace = await createSpace(profile.id);
+          currentSpaceId = newSpace.id;
+          if (!cancelled) {
+            setInviteCode(newSpace.inviteCode);
+            saveLocalCoupleSpace({ inviteCode: newSpace.inviteCode, role: 'owner' });
+          }
+        }
+        if (!cancelled && currentSpaceId) {
+          saveUserProfile({ ...profile, spaceId: currentSpaceId });
+          unsubscribe = subscribeToPartnerJoined(currentSpaceId, async () => {
+            const updatedUser = await getUser(profile.id);
+            saveUserProfile({ ...profile, spaceId: updatedUser.spaceId });
+            router.replace('/(tabs)');
+          });
+        }
+      } catch (error) {
+        console.error(error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  }, [router]);
 
   const handleBack = () => {
     router.back();
   };
 
   const handleCopyCode = async () => {
+    if (!inviteCode) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(inviteCode);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    copyIconScale.value = withSequence(
+      withSpring(1.22, { damping: 9, stiffness: 420 }),
+      withSpring(1, { damping: 14, stiffness: 320 })
+    );
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleCopyLink = async () => {
+    if (!inviteCode) return;
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await Clipboard.setStringAsync(`https://${inviteLink}`);
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert('Copied!', 'Link copied to clipboard');
   };
 
   const handleSendInvite = async () => {
+    if (!inviteCode) return;
     try {
+      await Haptics.selectionAsync();
       await Share.share({
         message: `Join me on Togetherly! Use code ${inviteCode} or visit https://${inviteLink}`,
         url: `https://${inviteLink}`,
@@ -62,6 +124,16 @@ export default function InvitePartnerScreen() {
     }
   };
 
+  /** Main app lives in (tabs); invite is optional — users were stuck here with no CTA. */
+  const handleContinueToApp = async () => {
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (inviteCode) {
+      saveLocalCoupleSpace({ inviteCode, role: 'owner' });
+    }
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.replace('/(tabs)');
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -69,7 +141,6 @@ export default function InvitePartnerScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={[styles.header, { marginTop: spacing.sm }]}>
             <Pressable
               onPress={handleBack}
@@ -96,7 +167,6 @@ export default function InvitePartnerScreen() {
             </View>
           </View>
 
-          {/* Couple Illustration */}
           <View style={[styles.illustrationContainer, { marginTop: spacing.xl }]}>
             <Image
               source={require('@/designs/avatar-sample.png')}
@@ -105,7 +175,6 @@ export default function InvitePartnerScreen() {
             />
           </View>
 
-          {/* Invite Card */}
           <View
             style={[
               styles.inviteCard,
@@ -129,7 +198,6 @@ export default function InvitePartnerScreen() {
               <ThemedText style={{ color: colors.primary, fontFamily: Fonts.medium }}>link</ThemedText> to invite your partner.
             </ThemedText>
 
-            {/* Code Box */}
             <View
               style={[
                 styles.codeBox,
@@ -141,32 +209,37 @@ export default function InvitePartnerScreen() {
               ]}
             >
               <View style={styles.codeIconContainer}>
-                <ThemedText style={[styles.codeIcon, { color: colors.textSecondary }]}>
-                  ✏️
+                <Ionicons name="ticket-outline" size={22} color={colors.textSecondary} />
+              </View>
+              <View style={styles.codeTextWrap}>
+                <ThemedText style={[styles.codeText, { fontFamily: Fonts.bold }]}>
+                  {inviteCode}
                 </ThemedText>
               </View>
-              <ThemedText style={[styles.codeText, { fontFamily: Fonts.bold }]}>
-                {inviteCode}
-              </ThemedText>
               <Pressable
                 onPress={handleCopyCode}
+                accessibilityLabel={copied ? 'Code copied' : 'Copy invite code'}
+                hitSlop={10}
                 style={({ pressed }) => [
                   styles.copyButton,
                   {
                     backgroundColor: colors.surface,
                     borderRadius: borderRadius.md,
-                    opacity: pressed ? 0.7 : 1,
+                    opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
-                <ThemedText style={[styles.copyIcon, { color: colors.textSecondary }]}>
-                  {copied ? '✓' : '📋'}
-                </ThemedText>
+                <Animated.View style={[styles.copyIconWrap, copyIconAnimatedStyle]}>
+                  <Ionicons
+                    name={copied ? 'checkmark-circle' : 'copy-outline'}
+                    size={24}
+                    color={copied ? colors.primary : colors.textSecondary}
+                  />
+                </Animated.View>
               </Pressable>
             </View>
 
-            {/* Link */}
-            <Pressable onPress={handleCopyLink}>
+            <Pressable onPress={handleCopyLink} accessibilityRole="button" accessibilityLabel="Copy invite link">
               <ThemedText
                 style={[
                   styles.linkText,
@@ -178,31 +251,60 @@ export default function InvitePartnerScreen() {
             </Pressable>
           </View>
 
-          {/* Spacer */}
           <View style={styles.spacer} />
 
-          {/* Send Invite Button */}
-          <View style={[styles.buttonContainer, { marginBottom: spacing.xl }]}>
+          <View style={[styles.buttonColumn, { marginBottom: spacing.xl, gap: spacing.md }]}>
+            <Pressable
+              onPress={handleContinueToApp}
+              disabled={loading || !inviteCode}
+              style={({ pressed }) => [
+                styles.button,
+                {
+                  backgroundColor: loading || !inviteCode ? colors.border : colors.primary,
+                  borderRadius: borderRadius.full,
+                  opacity: pressed && !loading && inviteCode ? 0.9 : 1,
+                  transform: [{ scale: pressed && !loading && inviteCode ? 0.98 : 1 }],
+                },
+              ]}
+            >
+              <Ionicons
+                name="home-outline"
+                size={20}
+                color={loading || !inviteCode ? colors.textMuted : colors.primaryText}
+              />
+              <ThemedText
+                style={[
+                  styles.buttonText,
+                  {
+                    color: loading || !inviteCode ? colors.textMuted : colors.primaryText,
+                    fontFamily: Fonts.semibold,
+                  },
+                ]}
+              >
+                {loading ? 'Creating space...' : 'Continue to app'}
+              </ThemedText>
+            </Pressable>
             <Pressable
               onPress={handleSendInvite}
               style={({ pressed }) => [
                 styles.button,
+                styles.buttonSecondary,
                 {
-                  backgroundColor: colors.primary,
                   borderRadius: borderRadius.full,
-                  opacity: pressed ? 0.9 : 1,
+                  borderColor: colors.primary,
+                  opacity: pressed ? 0.85 : 1,
                   transform: [{ scale: pressed ? 0.98 : 1 }],
                 },
               ]}
             >
-              <ThemedText style={[styles.buttonIcon]}>💌</ThemedText>
+              <Ionicons name="paper-plane-outline" size={20} color={colors.primary} />
               <ThemedText
                 style={[
                   styles.buttonText,
-                  { color: colors.primaryText, fontFamily: Fonts.semibold },
+                  { color: colors.primary, fontFamily: Fonts.semibold },
                 ]}
               >
-                Send Invite
+                Send invite
               </ThemedText>
             </Pressable>
           </View>
@@ -271,20 +373,29 @@ const styles = StyleSheet.create({
   },
   codeIconContainer: {
     marginRight: 12,
+    flexShrink: 0,
   },
-  codeIcon: {
-    fontSize: 18,
+  codeTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    justifyContent: 'center',
   },
   codeText: {
     fontSize: 24,
-    letterSpacing: 4,
-    flex: 1,
+    lineHeight: 32,
+    letterSpacing: 3,
   },
   copyButton: {
-    padding: 10,
+    padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  copyIcon: {
-    fontSize: 18,
+  copyIconWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   linkText: {
     fontSize: 14,
@@ -293,7 +404,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 32,
   },
-  buttonContainer: {
+  buttonColumn: {
     paddingHorizontal: 8,
   },
   button: {
@@ -308,8 +419,11 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  buttonIcon: {
-    fontSize: 18,
+  buttonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   buttonText: {
     fontSize: 17,
