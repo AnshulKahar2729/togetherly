@@ -11,18 +11,19 @@ import {
   Nunito_600SemiBold,
   Nunito_700Bold,
 } from '@expo-google-fonts/nunito';
+import { QueryClientProvider } from '@tanstack/react-query';
 import 'react-native-reanimated';
 
+import { queryClient } from '@/lib/query-client';
+import { useTanstackSetup } from '@/hooks/use-tanstack-setup';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { Colors } from '@/constants/theme';
 
-// Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
-
-// Set the root background color to match our theme
 SystemUI.setBackgroundColorAsync(Colors.light.background);
 
 export default function RootLayout() {
+  useTanstackSetup();
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme];
 
@@ -35,12 +36,10 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (fontsLoaded) {
-      // Hide the native splash screen once fonts are ready
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
 
-  // Custom theme that matches our design
   const customTheme = {
     ...DefaultTheme,
     colors: {
@@ -58,17 +57,20 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={customTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="create-avatar" />
-        <Stack.Screen name="couple-space" />
-        <Stack.Screen name="invite-partner" />
-        <Stack.Screen name="join-space" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="dark" />
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider value={customTheme}>
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="index" />
+          <Stack.Screen name="create-avatar" />
+          <Stack.Screen name="avatar-playground" />
+          <Stack.Screen name="couple-space" />
+          <Stack.Screen name="invite-partner" />
+          <Stack.Screen name="join-space" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+        </Stack>
+        <StatusBar style="dark" />
+      </ThemeProvider>
+    </QueryClientProvider>
   );
 }

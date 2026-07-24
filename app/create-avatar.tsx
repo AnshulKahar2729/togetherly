@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   View,
   StyleSheet,
@@ -7,44 +7,70 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Image } from 'expo-image';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { LoreleiAvatarEditor } from '@/components/lorelei-avatar-editor';
 import { useTheme } from '@/hooks/use-theme';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
-
-const SKIN_TONES = [
-  { id: 'light', color: '#FFE4D6' },
-  { id: 'fair', color: '#F5D0B5' },
-  { id: 'medium', color: '#D4A574' },
-  { id: 'tan', color: '#A67C52' },
-  { id: 'brown', color: '#8B5A3C' },
-  { id: 'dark', color: '#5C3D2E' },
-] as const;
-
-type SkinToneId = (typeof SKIN_TONES)[number]['id'];
+import {
+  createRandomSeed,
+  DEFAULT_LORELEI_AVATAR_CONFIG,
+  type LoreleiAvatarConfig,
+} from '@/lib/lorelei-avatar';
+import { loadUserProfile } from '@/lib/storage/user-profile';
+import { useUpdateProfileMutation } from '@/hooks/api/user/use-update-profile-mutation';
 
 export default function CreateAvatarScreen() {
   const router = useRouter();
-  const { colors, spacing, borderRadius } = useTheme();
+  const { flow: flowParam } = useLocalSearchParams<{ flow?: string | string[] }>();
+  const flow = (Array.isArray(flowParam) ? flowParam[0] : flowParam) ?? 'create';
+
+  const { colors, borderRadius } = useTheme();
+  const { mutateAsync: updateProfile, isPending } = useUpdateProfileMutation();
 
   const [name, setName] = useState('');
-  const [selectedSkinTone, setSelectedSkinTone] = useState<SkinToneId>('fair');
+  const [avatar, setAvatar] = useState<LoreleiAvatarConfig>(DEFAULT_LORELEI_AVATAR_CONFIG);
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const profile = loadUserProfile();
+    if (profile) {
+      setName(profile.name);
+      setAvatar((current) => ({ ...current, seed: profile.avatarSeed, gender: profile.gender }));
+    } else {
+      setAvatar((a) => ({ ...a, seed: createRandomSeed() }));
+    }
+    setHydrated(true);
+  }, []);
 
   const handleBack = () => {
     router.back();
   };
 
-  const handleContinue = () => {
-    if (name.trim()) {
-      // Navigate to couple space setup
-      router.push('/couple-space');
+  const handleContinue = useCallback(async () => {
+    const trimmed = name.trim();
+    if (!trimmed || isPending) return;
+    await updateProfile({ name: trimmed, avatar });
+    if (flow === 'join') {
+      router.push('/join-space');
+    } else {
+      router.push('/invite-partner');
     }
-  };
+  }, [name, avatar, flow, isPending, updateProfile, router]);
 
   const isValid = name.trim().length > 0;
+
+  if (!hydrated) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -59,14 +85,10 @@ export default function CreateAvatarScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Header */}
-            <View style={[styles.header, { marginTop: spacing.sm }]}>
+            <View style={styles.header}>
               <Pressable
                 onPress={handleBack}
-                style={({ pressed }) => [
-                  styles.backButton,
-                  { opacity: pressed ? 0.6 : 1 },
-                ]}
+                style={({ pressed }) => [styles.backButton, { opacity: pressed ? 0.6 : 1 }]}
                 hitSlop={16}
               >
                 <ThemedText style={[styles.backArrow, { color: colors.textSecondary }]}>
@@ -75,62 +97,26 @@ export default function CreateAvatarScreen() {
               </Pressable>
               <ThemedText style={[styles.headerTitle, { fontFamily: Fonts.medium }]}>
                 Create a{' '}
-                <ThemedText style={[styles.headerTitle, { color: colors.primary, fontFamily: Fonts.semibold }]}>
+                <ThemedText
+                  style={[styles.headerTitle, { color: colors.primary, fontFamily: Fonts.semibold }]}
+                >
                   cute avatar
                 </ThemedText>
               </ThemedText>
             </View>
 
-            {/* Avatar Preview */}
-            <View style={[styles.avatarContainer, { marginTop: spacing.xl }]}>
-              <View
-                style={[
-                  styles.avatarFrame,
-                  {
-                    backgroundColor: colors.surface,
-                    borderRadius: borderRadius.xl,
-                  },
-                ]}
-              >
-                <Image
-                  source={require('@/designs/avatar-sample.png')}
-                  style={styles.avatarImage}
-                  contentFit="contain"
-                />
-              </View>
-            </View>
+            <LoreleiAvatarEditor
+              compact
+              value={avatar}
+              onChange={setAvatar}
+              showCouplePreview={flow === 'join'}
+            />
 
-            {/* Title */}
-            <ThemedText
-              style={[
-                styles.title,
-                { marginTop: spacing.xl, fontFamily: Fonts.semibold },
-              ]}
-            >
-              Create a cute avatar
+            <ThemedText style={[styles.title, { fontFamily: Fonts.semibold }]}>
+              Your name
             </ThemedText>
 
-            {/* Skin Tone Selector */}
-            <View style={[styles.skinToneContainer, { marginTop: spacing.lg }]}>
-              {SKIN_TONES.map((tone) => (
-                <Pressable
-                  key={tone.id}
-                  onPress={() => setSelectedSkinTone(tone.id)}
-                  style={({ pressed }) => [
-                    styles.skinToneButton,
-                    {
-                      backgroundColor: tone.color,
-                      borderWidth: selectedSkinTone === tone.id ? 3 : 0,
-                      borderColor: colors.primary,
-                      transform: [{ scale: pressed ? 0.9 : 1 }],
-                    },
-                  ]}
-                />
-              ))}
-            </View>
-
-            {/* Name Input */}
-            <View style={[styles.inputContainer, { marginTop: spacing.xl }]}>
+            <View style={styles.inputContainer}>
               <TextInput
                 style={[
                   styles.input,
@@ -152,35 +138,35 @@ export default function CreateAvatarScreen() {
               />
             </View>
 
-            {/* Spacer */}
-            <View style={styles.spacer} />
-
-            {/* Continue Button */}
-            <View style={[styles.buttonContainer, { marginBottom: spacing.xl }]}>
+            <View style={styles.buttonContainer}>
               <Pressable
                 onPress={handleContinue}
-                disabled={!isValid}
+                disabled={!isValid || isPending}
                 style={({ pressed }) => [
                   styles.button,
                   {
-                    backgroundColor: isValid ? colors.primary : colors.border,
+                    backgroundColor: isValid && !isPending ? colors.primary : colors.border,
                     borderRadius: borderRadius.full,
-                    opacity: pressed && isValid ? 0.9 : 1,
-                    transform: [{ scale: pressed && isValid ? 0.98 : 1 }],
+                    opacity: pressed && isValid && !isPending ? 0.9 : 1,
+                    transform: [{ scale: pressed && isValid && !isPending ? 0.98 : 1 }],
                   },
                 ]}
               >
-                <ThemedText
-                  style={[
-                    styles.buttonText,
-                    {
-                      color: isValid ? colors.primaryText : colors.textMuted,
-                      fontFamily: Fonts.semibold,
-                    },
-                  ]}
-                >
-                  Continue
-                </ThemedText>
+                {isPending ? (
+                  <ActivityIndicator color={colors.primaryText} />
+                ) : (
+                  <ThemedText
+                    style={[
+                      styles.buttonText,
+                      {
+                        color: isValid ? colors.primaryText : colors.textMuted,
+                        fontFamily: Fonts.semibold,
+                      },
+                    ]}
+                  >
+                    Continue
+                  </ThemedText>
+                )}
               </Pressable>
             </View>
           </ScrollView>
@@ -191,90 +177,34 @@ export default function CreateAvatarScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-  },
+  container: { flex: 1 },
+  centered: { alignItems: 'center', justifyContent: 'center' },
+  safeArea: { flex: 1 },
+  keyboardView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 16 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 4,
+    marginBottom: 6,
   },
-  backButton: {
-    marginRight: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-  },
-  backArrow: {
-    fontSize: 28,
-    lineHeight: 28,
-  },
-  headerTitle: {
-    fontSize: 17,
-  },
-  avatarContainer: {
-    alignItems: 'center',
-  },
-  avatarFrame: {
-    width: 220,
-    height: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  avatarImage: {
-    width: 200,
-    height: 160,
-  },
-  title: {
-    fontSize: 20,
-    textAlign: 'center',
-  },
-  skinToneContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 14,
-  },
-  skinToneButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  inputContainer: {
-    paddingHorizontal: 8,
-  },
-  input: {
-    height: 56,
-    paddingHorizontal: 20,
-    fontSize: 16,
-    borderWidth: 1,
-  },
-  spacer: {
-    flex: 1,
-    minHeight: 32,
-  },
-  buttonContainer: {
-    paddingHorizontal: 8,
-  },
+  backButton: { marginRight: 4, paddingVertical: 4, paddingHorizontal: 8 },
+  backArrow: { fontSize: 28, lineHeight: 28 },
+  headerTitle: { fontSize: 16 },
+  title: { fontSize: 16, textAlign: 'center', marginTop: 8, marginBottom: 8 },
+  inputContainer: { paddingHorizontal: 4 },
+  input: { height: 50, paddingHorizontal: 16, fontSize: 16, borderWidth: 1 },
+  buttonContainer: { paddingHorizontal: 8, marginTop: 22, marginBottom: 8 },
   button: {
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 50,
     shadowColor: '#FF8A7A',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 4,
   },
-  buttonText: {
-    fontSize: 17,
-  },
+  buttonText: { fontSize: 17 },
 });

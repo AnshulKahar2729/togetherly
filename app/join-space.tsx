@@ -7,14 +7,18 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
+
 import { useTheme } from '@/hooks/use-theme';
 import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
+import { useJoinSpaceMutation } from '@/hooks/api/couple/use-join-space-mutation';
 
 const CODE_LENGTH = 6;
 
@@ -23,6 +27,7 @@ export default function JoinSpaceScreen() {
   const { colors, spacing, borderRadius } = useTheme();
   const [code, setCode] = useState<string[]>(Array(CODE_LENGTH).fill(''));
   const inputRefs = useRef<(TextInput | null)[]>([]);
+  const { mutateAsync: joinSpace, isPending } = useJoinSpaceMutation();
 
   const handleBack = () => {
     router.back();
@@ -31,7 +36,6 @@ export default function JoinSpaceScreen() {
   const handleCodeChange = (text: string, index: number) => {
     const newCode = [...code];
 
-    // Handle paste of full code
     if (text.length > 1) {
       const pastedCode = text.toUpperCase().slice(0, CODE_LENGTH).split('');
       for (let i = 0; i < CODE_LENGTH; i++) {
@@ -44,8 +48,6 @@ export default function JoinSpaceScreen() {
 
     newCode[index] = text.toUpperCase();
     setCode(newCode);
-
-    // Move to next input
     if (text && index < CODE_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
@@ -59,10 +61,15 @@ export default function JoinSpaceScreen() {
 
   const handleJoinSpace = async () => {
     const fullCode = code.join('');
-    if (fullCode.length === CODE_LENGTH) {
+    if (fullCode.length !== CODE_LENGTH || isPending) return;
+    try {
+      await joinSpace(fullCode);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      // TODO: Validate code and join space
       router.replace('/(tabs)');
+    } catch (error) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const message = error instanceof Error ? error.message : 'Unable to join space';
+      Alert.alert('Could not join space', message);
     }
   };
 
@@ -80,14 +87,10 @@ export default function JoinSpaceScreen() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Header */}
             <View style={[styles.header, { marginTop: spacing.sm }]}>
               <Pressable
                 onPress={handleBack}
-                style={({ pressed }) => [
-                  styles.backButton,
-                  { opacity: pressed ? 0.6 : 1 },
-                ]}
+                style={({ pressed }) => [styles.backButton, { opacity: pressed ? 0.6 : 1 }]}
                 hitSlop={16}
               >
                 <ThemedText style={[styles.backArrow, { color: colors.textSecondary }]}>
@@ -99,15 +102,16 @@ export default function JoinSpaceScreen() {
                   Join your
                 </ThemedText>
                 <ThemedText style={[styles.headerTitle, { fontFamily: Fonts.medium }]}>
-                  <ThemedText style={[styles.headerTitle, { color: colors.accent, fontFamily: Fonts.semibold }]}>
-                    partner's
+                  <ThemedText
+                    style={[styles.headerTitle, { color: colors.accent, fontFamily: Fonts.semibold }]}
+                  >
+                    {`partner's`}
                   </ThemedText>{' '}
                   space
                 </ThemedText>
               </View>
             </View>
 
-            {/* Couple Illustration */}
             <View style={[styles.illustrationContainer, { marginTop: spacing.xl }]}>
               <Image
                 source={require('@/designs/avatar-sample.png')}
@@ -116,7 +120,6 @@ export default function JoinSpaceScreen() {
               />
             </View>
 
-            {/* Join Card */}
             <View
               style={[
                 styles.joinCard,
@@ -139,7 +142,6 @@ export default function JoinSpaceScreen() {
                 Ask your partner for the 6-character code they received.
               </ThemedText>
 
-              {/* Code Input */}
               <View style={[styles.codeInputContainer, { marginTop: spacing.lg }]}>
                 {code.map((char, index) => (
                   <TextInput
@@ -164,11 +166,11 @@ export default function JoinSpaceScreen() {
                     autoCorrect={false}
                     keyboardType="default"
                     textAlign="center"
+                    editable={!isPending}
                   />
                 ))}
               </View>
 
-              {/* Helper text */}
               <ThemedText
                 style={[
                   styles.helperText,
@@ -179,35 +181,37 @@ export default function JoinSpaceScreen() {
               </ThemedText>
             </View>
 
-            {/* Spacer */}
             <View style={styles.spacer} />
 
-            {/* Join Button */}
             <View style={[styles.buttonContainer, { marginBottom: spacing.xl }]}>
               <Pressable
                 onPress={handleJoinSpace}
-                disabled={!isCodeComplete}
+                disabled={!isCodeComplete || isPending}
                 style={({ pressed }) => [
                   styles.button,
                   {
-                    backgroundColor: isCodeComplete ? colors.primary : colors.border,
+                    backgroundColor: isCodeComplete && !isPending ? colors.primary : colors.border,
                     borderRadius: borderRadius.full,
-                    opacity: pressed && isCodeComplete ? 0.9 : 1,
-                    transform: [{ scale: pressed && isCodeComplete ? 0.98 : 1 }],
+                    opacity: pressed && isCodeComplete && !isPending ? 0.9 : 1,
+                    transform: [{ scale: pressed && isCodeComplete && !isPending ? 0.98 : 1 }],
                   },
                 ]}
               >
-                <ThemedText style={[styles.buttonIcon]}>💕</ThemedText>
+                <Ionicons
+                  name="heart-outline"
+                  size={20}
+                  color={isCodeComplete && !isPending ? colors.primaryText : colors.textMuted}
+                />
                 <ThemedText
                   style={[
                     styles.buttonText,
                     {
-                      color: isCodeComplete ? colors.primaryText : colors.textMuted,
+                      color: isCodeComplete && !isPending ? colors.primaryText : colors.textMuted,
                       fontFamily: Fonts.semibold,
                     },
                   ]}
                 >
-                  Join Space
+                  {isPending ? 'Joining...' : 'Join Space'}
                 </ThemedText>
               </Pressable>
             </View>
@@ -219,77 +223,25 @@ export default function JoinSpaceScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  backButton: {
-    paddingVertical: 4,
-    paddingRight: 12,
-  },
-  backArrow: {
-    fontSize: 28,
-    lineHeight: 36,
-  },
-  headerTitleContainer: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 24,
-    lineHeight: 32,
-  },
-  illustrationContainer: {
-    alignItems: 'center',
-  },
-  illustration: {
-    width: 220,
-    height: 180,
-  },
-  joinCard: {
-    padding: 24,
-    alignItems: 'center',
-  },
-  joinTitle: {
-    fontSize: 20,
-  },
-  joinDescription: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 8,
-    lineHeight: 20,
-  },
-  codeInputContainer: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  codeInput: {
-    width: 44,
-    height: 52,
-    fontSize: 20,
-  },
-  helperText: {
-    fontSize: 12,
-  },
-  spacer: {
-    flex: 1,
-    minHeight: 32,
-  },
-  buttonContainer: {
-    paddingHorizontal: 8,
-  },
+  container: { flex: 1 },
+  safeArea: { flex: 1 },
+  keyboardView: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24 },
+  header: { flexDirection: 'row', alignItems: 'flex-start' },
+  backButton: { paddingVertical: 4, paddingRight: 12 },
+  backArrow: { fontSize: 28, lineHeight: 36 },
+  headerTitleContainer: { flex: 1 },
+  headerTitle: { fontSize: 24, lineHeight: 32 },
+  illustrationContainer: { alignItems: 'center' },
+  illustration: { width: 220, height: 180 },
+  joinCard: { padding: 24, alignItems: 'center' },
+  joinTitle: { fontSize: 20 },
+  joinDescription: { fontSize: 14, textAlign: 'center', marginTop: 8, lineHeight: 20 },
+  codeInputContainer: { flexDirection: 'row', gap: 8 },
+  codeInput: { width: 44, height: 52, fontSize: 20 },
+  helperText: { fontSize: 12 },
+  spacer: { flex: 1, minHeight: 32 },
+  buttonContainer: { paddingHorizontal: 8 },
   button: {
     flexDirection: 'row',
     paddingVertical: 16,
@@ -302,10 +254,5 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 4,
   },
-  buttonIcon: {
-    fontSize: 18,
-  },
-  buttonText: {
-    fontSize: 17,
-  },
+  buttonText: { fontSize: 17 },
 });

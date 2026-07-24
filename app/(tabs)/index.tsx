@@ -1,25 +1,54 @@
-import { View, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
+
+import { LoreleiAvatar } from '@/components/lorelei-avatar';
+import { PartnerRequiredScreen } from '@/components/partner-required-screen';
 import { ThemedText } from '@/components/themed-text';
+import { useCoupleSummaryQuery } from '@/hooks/api/couple/use-couple-summary-query';
 import { useTheme } from '@/hooks/use-theme';
 import { Fonts } from '@/constants/theme';
+import { DEFAULT_LORELEI_AVATAR_CONFIG } from '@/lib/lorelei-avatar';
 
-// Dummy data - will be replaced with actual state management
-const COUPLE_DATA = {
-  isConnected: true, // Set to true when two people are in the space
-  user1: { name: 'Anshul', avatar: null },
-  user2: { name: 'Riya', avatar: null },
-};
-
-const GOALS: Array<{ id: string; title: string }> = []; // Empty for now
+const GOALS: { id: string; title: string }[] = [];
 
 export default function HomeScreen() {
   const { colors, spacing, borderRadius } = useTheme();
+  const { data: summary, isLoading, error } = useCoupleSummaryQuery();
 
   const handleAddGoal = () => {
     // TODO: Navigate to add goal screen
   };
+
+  if (isLoading && !summary) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (error || !summary) {
+    return (
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ThemedText style={{ fontFamily: Fonts.regular, color: colors.textSecondary }}>
+          Something went wrong loading your space.
+        </ThemedText>
+      </View>
+    );
+  }
+
+  if (!summary.hasPartner || summary.partner == null) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <PartnerRequiredScreen loading={false} />
+      </View>
+    );
+  }
+
+  const partnerAvatar =
+    summary.partner.avatar ?? { ...DEFAULT_LORELEI_AVATAR_CONFIG, seed: 'partner' };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -28,9 +57,7 @@ export default function HomeScreen() {
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
-          {/* Header */}
           <View style={[styles.header, { paddingHorizontal: spacing.lg }]}>
-            {/* Couple Avatar */}
             <View style={styles.coupleAvatarContainer}>
               <View
                 style={[
@@ -38,7 +65,7 @@ export default function HomeScreen() {
                   { backgroundColor: colors.surface, borderColor: colors.background },
                 ]}
               >
-                <ThemedText style={styles.avatarEmoji}>👩</ThemedText>
+                <LoreleiAvatar config={summary.self.avatar} size={40} />
               </View>
               <View
                 style={[
@@ -47,29 +74,24 @@ export default function HomeScreen() {
                   { backgroundColor: colors.surface, borderColor: colors.background },
                 ]}
               >
-                <ThemedText style={styles.avatarEmoji}>👨</ThemedText>
+                <LoreleiAvatar config={partnerAvatar} size={40} />
               </View>
             </View>
 
-            {/* Couple Names */}
-            <ThemedText style={[styles.coupleNames, { fontFamily: Fonts.semibold }]}>
-              {COUPLE_DATA.user1.name} & {COUPLE_DATA.user2.name}
+            <ThemedText style={[styles.coupleNames, { fontFamily: Fonts.semibold }]} numberOfLines={2}>
+              {summary.self.displayName} & {summary.partner.displayName}
             </ThemedText>
 
-            {/* Location Pin */}
             <View
               style={[
                 styles.locationPin,
                 { backgroundColor: colors.primary + '15' },
               ]}
             >
-              <ThemedText style={[styles.locationIcon, { color: colors.primary }]}>
-                📍
-              </ThemedText>
+              <Ionicons name="location-outline" size={18} color={colors.primary} />
             </View>
           </View>
 
-          {/* Section Title */}
           <ThemedText
             style={[
               styles.sectionTitle,
@@ -79,10 +101,8 @@ export default function HomeScreen() {
             Things you planned together
           </ThemedText>
 
-          {/* Goals List or Empty State */}
           {GOALS.length === 0 ? (
             <View style={[styles.emptyStateContainer, { marginTop: spacing.lg }]}>
-              {/* Illustration Card */}
               <View
                 style={[
                   styles.illustrationCard,
@@ -99,28 +119,16 @@ export default function HomeScreen() {
                   contentFit="contain"
                 />
 
-                {/* Prompt Text */}
                 <View style={styles.promptContainer}>
-                  <ThemedText
-                    style={[
-                      styles.promptText,
-                      { fontFamily: Fonts.semibold },
-                    ]}
-                  >
-                    What's the first thing
+                  <ThemedText style={[styles.promptText, { fontFamily: Fonts.semibold }]}>
+                    What&apos;s the first thing
                   </ThemedText>
-                  <ThemedText
-                    style={[
-                      styles.promptText,
-                      { fontFamily: Fonts.semibold },
-                    ]}
-                  >
+                  <ThemedText style={[styles.promptText, { fontFamily: Fonts.semibold }]}>
                     you want to do together?
                   </ThemedText>
                 </View>
               </View>
 
-              {/* Add Goal Button */}
               <Pressable
                 onPress={handleAddGoal}
                 style={({ pressed }) => [
@@ -135,9 +143,7 @@ export default function HomeScreen() {
                   },
                 ]}
               >
-                <ThemedText style={[styles.addGoalIcon, { color: colors.primaryText }]}>
-                  +
-                </ThemedText>
+                <Ionicons name="add-circle-outline" size={22} color={colors.primaryText} />
                 <ThemedText
                   style={[
                     styles.addGoalText,
@@ -149,7 +155,6 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           ) : (
-            // TODO: Render goals list
             <View />
           )}
         </ScrollView>
@@ -161,6 +166,10 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   safeArea: {
     flex: 1,
@@ -185,12 +194,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
+    overflow: 'hidden',
   },
   avatarOverlap: {
     marginLeft: -12,
-  },
-  avatarEmoji: {
-    fontSize: 20,
   },
   coupleNames: {
     flex: 1,
@@ -202,9 +209,6 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  locationIcon: {
-    fontSize: 16,
   },
   sectionTitle: {
     fontSize: 16,
@@ -241,10 +245,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 12,
     elevation: 4,
-  },
-  addGoalIcon: {
-    fontSize: 20,
-    fontWeight: '500',
   },
   addGoalText: {
     fontSize: 17,
