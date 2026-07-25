@@ -1,4 +1,4 @@
-import { config } from '@/lib/config';
+import { apiFetch, parseJsonResponse } from '@/lib/api/http';
 
 export type SpaceResponse = {
   id: string;
@@ -7,28 +7,22 @@ export type SpaceResponse = {
   partnerId: string | null;
 };
 
-async function parseResponse<T>(res: Response): Promise<T> {
-  const body = await res.json().catch(() => ({})) as { data?: T; error?: { message?: string } };
-  if (!res.ok) throw new Error(body.error?.message ?? `Request failed (${res.status})`);
-  return body.data as T;
-}
-
-export const createSpace = (userId: string) =>
-  fetch(`${config.apiBaseUrl}/spaces`, {
+export const createSpace = () =>
+  apiFetch('/spaces', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId }),
-  }).then(parseResponse<SpaceResponse>);
+    body: JSON.stringify({}),
+  }).then(parseJsonResponse<SpaceResponse>);
 
-export const joinSpace = (userId: string, inviteCode: string) =>
-  fetch(`${config.apiBaseUrl}/spaces/join`, {
+export const joinSpace = (inviteCode: string) =>
+  apiFetch('/spaces/join', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId, inviteCode }),
-  }).then(parseResponse<SpaceResponse>);
+    body: JSON.stringify({ inviteCode }),
+  }).then(parseJsonResponse<SpaceResponse>);
 
 export const getSpace = (spaceId: string) =>
-  fetch(`${config.apiBaseUrl}/spaces/${spaceId}`).then(parseResponse<SpaceResponse>);
+  apiFetch(`/spaces/${spaceId}`).then(parseJsonResponse<SpaceResponse>);
 
 /** Stub — will be replaced with WebSocket/SSE when real-time is wired up. */
 export function subscribeToPartnerJoined(

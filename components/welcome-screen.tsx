@@ -16,9 +16,16 @@ import { CloudDecoration } from './cloud-decoration';
 
 interface WelcomeScreenProps {
   onGetStarted: () => void;
+  /** When false, the primary CTA is disabled (e.g. session restore in progress). */
+  getStartedEnabled?: boolean;
+  getStartedLabel?: string;
 }
 
-export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  onGetStarted,
+  getStartedEnabled = true,
+  getStartedLabel = 'Get Started',
+}: WelcomeScreenProps) {
   const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -86,18 +93,24 @@ export function WelcomeScreen({ onGetStarted }: WelcomeScreenProps) {
       >
         <Pressable
           onPress={onGetStarted}
+          disabled={!getStartedEnabled}
           style={({ pressed }) => [
             styles.button,
             {
-              backgroundColor: colors.primary,
+              backgroundColor: getStartedEnabled ? colors.primary : colors.border,
               borderRadius: borderRadius.full,
-              opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.98 : 1 }],
+              opacity: pressed && getStartedEnabled ? 0.9 : 1,
+              transform: [{ scale: pressed && getStartedEnabled ? 0.98 : 1 }],
             },
           ]}
         >
-          <ThemedText style={[styles.buttonText, { color: colors.primaryText }]}>
-            Get Started
+          <ThemedText
+            style={[
+              styles.buttonText,
+              { color: getStartedEnabled ? colors.primaryText : colors.textMuted },
+            ]}
+          >
+            {getStartedLabel}
           </ThemedText>
         </Pressable>
       </Animated.View>

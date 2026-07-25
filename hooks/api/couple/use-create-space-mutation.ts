@@ -12,7 +12,7 @@ export function useCreateSpaceMutation() {
     mutationFn: async () => {
       const profile = loadUserProfile();
       if (!profile) throw new Error('Profile not found');
-      const space = await createSpace(profile.id);
+      const space = await createSpace();
       saveLocalCoupleSpace({ inviteCode: space.inviteCode, role: 'owner' });
       saveUserProfile({ ...profile, spaceId: space.id });
       return space;

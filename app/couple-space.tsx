@@ -25,9 +25,9 @@ export default function CoupleSpaceScreen() {
 
   const handleContinue = () => {
     if (selected === 'create') {
-      router.push({ pathname: '/create-avatar', params: { flow: 'create' } });
+      router.push('/create-avatar?flow=create');
     } else if (selected === 'join') {
-      router.push({ pathname: '/create-avatar', params: { flow: 'join' } });
+      router.push('/create-avatar?flow=join');
     }
   };
 

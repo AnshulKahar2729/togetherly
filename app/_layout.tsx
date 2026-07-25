@@ -61,6 +61,7 @@ export default function RootLayout() {
       <ThemeProvider value={customTheme}>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />
+          <Stack.Screen name="sign-in" />
           <Stack.Screen name="create-avatar" />
           <Stack.Screen name="avatar-playground" />
           <Stack.Screen name="couple-space" />

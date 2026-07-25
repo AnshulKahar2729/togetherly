@@ -12,7 +12,7 @@ export function useJoinSpaceMutation() {
     mutationFn: async (inviteCode: string) => {
       const profile = loadUserProfile();
       if (!profile) throw new Error('Profile not found');
-      const space = await joinSpace(profile.id, inviteCode);
+      const space = await joinSpace(inviteCode);
       saveLocalCoupleSpace({ inviteCode: space.inviteCode, role: 'member' });
       saveUserProfile({ ...profile, spaceId: space.id });
       return space;
