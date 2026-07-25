@@ -1,5 +1,6 @@
 import { buildAvatarFromProfile, type LoreleiAvatarConfig } from '@/lib/lorelei-avatar';
-import { config } from '@/lib/config';
+
+import { apiFetch, parseJsonResponse } from '@/lib/api/http';
 
 type CoupleUserSummary = {
   id: string;
@@ -39,9 +40,8 @@ function toCoupleSummary(raw: CoupleSummaryResponse): CoupleSummary {
   };
 }
 
-export async function fetchCoupleSummary(userId: string): Promise<CoupleSummary> {
-  const res = await fetch(`${config.apiBaseUrl}/couple/summary?userId=${userId}`);
-  const body = await res.json().catch(() => ({})) as { data?: CoupleSummaryResponse; error?: { message?: string } };
-  if (!res.ok) throw new Error(body.error?.message ?? `Request failed (${res.status})`);
-  return toCoupleSummary(body.data!);
+export async function fetchCoupleSummary(): Promise<CoupleSummary> {
+  const res = await apiFetch('/couple/summary');
+  const raw = await parseJsonResponse<CoupleSummaryResponse>(res);
+  return toCoupleSummary(raw);
 }

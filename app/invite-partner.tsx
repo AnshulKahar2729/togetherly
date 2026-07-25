@@ -24,8 +24,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Fonts } from '@/constants/theme';
 import { saveLocalCoupleSpace } from '@/lib/storage/couple-space';
 import { createSpace, getSpace, subscribeToPartnerJoined } from '@/lib/api/spaces';
-import { getUser } from '@/lib/api/users';
-import { loadUserProfile, saveUserProfile } from '@/lib/storage/user-profile';
+import { fetchMe } from '@/lib/api/users';
+import { loadUserProfile, saveUserProfile, userProfileFromResponse } from '@/lib/storage/user-profile';
 
 export default function InvitePartnerScreen() {
   const router = useRouter();
@@ -59,7 +59,7 @@ export default function InvitePartnerScreen() {
           }
         }
         if (!currentSpaceId) {
-          const newSpace = await createSpace(profile.id);
+          const newSpace = await createSpace();
           currentSpaceId = newSpace.id;
           if (!cancelled) {
             setInviteCode(newSpace.inviteCode);
@@ -69,8 +69,8 @@ export default function InvitePartnerScreen() {
         if (!cancelled && currentSpaceId) {
           saveUserProfile({ ...profile, spaceId: currentSpaceId });
           unsubscribe = subscribeToPartnerJoined(currentSpaceId, async () => {
-            const updatedUser = await getUser(profile.id);
-            saveUserProfile({ ...profile, spaceId: updatedUser.spaceId });
+            const updatedUser = await fetchMe();
+            saveUserProfile(userProfileFromResponse(updatedUser));
             router.replace('/(tabs)');
           });
         }

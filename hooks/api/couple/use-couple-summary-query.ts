@@ -9,7 +9,7 @@ export function useCoupleSummaryQuery() {
 
   return useQuery({
     queryKey: queryKeys.couple.summary(userId ?? ''),
-    queryFn: () => fetchCoupleSummary(userId!),
+    queryFn: () => fetchCoupleSummary(),
     enabled: userId !== null,
   });
 }

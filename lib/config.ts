@@ -11,5 +11,6 @@ if (!parsed.success) {
 }
 
 export const config = {
-  apiBaseUrl: `${parsed.data.EXPO_PUBLIC_API_URL}/api`,
+  /** Matches backend `app.use("/api/v1", mainRouter)`. */
+  apiBaseUrl: `${parsed.data.EXPO_PUBLIC_API_URL.replace(/\/$/, '')}/api/v1`,
 } as const;
